@@ -20,11 +20,31 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
 const NUMBERS = "0123456789".split('');
 const ALL_CHARS = [...LETTERS, ...NUMBERS];
 
-// Level 2: Simple Dutch Words
+// Level 2: 100+ Common Dutch Words for Children
 const DUTCH_WORDS = [
-    "KAT", "HOND", "VIS", "BAL", "BOOM", 
-    "HUIS", "MAAN", "ZON", "BOOT", "MUIS",
-    "EEND", "PEN", "BOEK", "KOEK", "MELK"
+    // Familie
+    "MAMA", "PAPA", "OMA", "OPA", "BABY", "BROER", "ZUS", "OOM", "TANTE",
+    // Dieren
+    "HOND", "KAT", "VIS", "VOGEL", "KOE", "PAARD", "SCHAAP", "EEND", "KONIJN", 
+    "KIP", "VARKEN", "AAP", "OLIFANT", "BEER", "MUIS", "SLANG", "TIJGER", "VLINDER",
+    // Huis & Spullen
+    "HUIS", "DEUR", "RAAM", "STOEL", "TAFEL", "BED", "LAMP", "KLOK", "BAD",
+    // Vervoer
+    "AUTO", "FIETS", "TREIN", "BUS", "BOOT", "VLIEGTUIG", "STEP",
+    // Speelgoed & School
+    "BAL", "POP", "BOEK", "PEN", "POTLOOD", "TAS", "SCHOOL", "GOM", "BLOK",
+    // Eten & Drinken
+    "APPEL", "PEER", "BANAAN", "BROOD", "MELK", "KAAS", "EI", "KOEK", "IJS", "WATER", "SAP", "SNOEP",
+    // Natuur & Weer
+    "ZON", "MAAN", "STER", "BOOM", "BLOEM", "GRAS", "WOLK", "REGEN", "SNEEUW", "WIND", "BOS", "ZEE", "STRAND",
+    // Lichaam
+    "NEUS", "OOG", "OOR", "MOND", "HAND", "VOET", "BUIK", "HAAR", "TAND",
+    // Kleding
+    "JAS", "BROEK", "SCHOEN", "SOK", "MUTS", "TRUI", "JURK",
+    // Kleuren
+    "ROOD", "BLAUW", "GEEL", "GROEN", "WIT", "ZWART", "ROZE",
+    // Overig
+    "GROOT", "KLEIN", "LIEF", "BLIJ", "BOOS", "TUIN", "PARK"
 ];
 
 const getRandomChar = () => ALL_CHARS[Math.floor(Math.random() * ALL_CHARS.length)];
@@ -50,6 +70,7 @@ const App: React.FC = () => {
   const [showCoin, setShowCoin] = useState<boolean>(false);
   const [showStar, setShowStar] = useState<boolean>(false);
   const [isJumping, setIsJumping] = useState<boolean>(false);
+  const [isMoving, setIsMoving] = useState<boolean>(false);
   const [hitIndices, setHitIndices] = useState<number[]>([]); // Tracks which blocks in word are hit
   
   const isProcessingRef = useRef(false);
@@ -77,6 +98,7 @@ const App: React.FC = () => {
       setShowStar(false);
       setHitIndices([]);
       setLives(INITIAL_LIVES);
+      setIsMoving(false);
   };
 
   const nextRound = useCallback((currentLevel: GameLevel) => {
@@ -88,6 +110,7 @@ const App: React.FC = () => {
     setHitIndices([]);
     setWordIndex(0);
     setIsJumping(false);
+    setIsMoving(false);
 
     if (currentLevel === GameLevel.ONE) {
         const next = getRandomChar();
@@ -179,6 +202,13 @@ const App: React.FC = () => {
                  setIsJumping(false);
                  setShowCoin(false);
                  setWordIndex(prev => prev + 1);
+                 
+                 // Trigger visual walking animation matching CSS transition
+                 if (level === GameLevel.TWO) {
+                     setIsMoving(true);
+                     setTimeout(() => setIsMoving(false), 500); // 500ms duration
+                 }
+
                  isProcessingRef.current = false; // Allow next input
                  
                  // Pronounce next letter
@@ -373,7 +403,7 @@ const App: React.FC = () => {
                             : 'translateX(0)'
                     }}
                  >
-                    <Mario isJumping={isJumping} />
+                    <Mario isJumping={isJumping} isMoving={isMoving} />
                  </div>
             </div>
 

@@ -35,14 +35,57 @@ export const StarAnimation: React.FC = () => {
 }
 
 // Simple CSS Pixel Mario
-export const Mario: React.FC<{ isJumping: boolean }> = ({ isJumping }) => {
+interface MarioProps {
+    isJumping: boolean;
+    isMoving?: boolean;
+}
+
+export const Mario: React.FC<MarioProps> = ({ isJumping, isMoving = false }) => {
     return (
         <div className={`
             relative w-16 h-16 md:w-20 md:h-20 transition-transform duration-200 ease-in-out
             ${isJumping ? 'translate-y-[-50px] md:translate-y-[-80px]' : 'translate-y-0'}
         `}>
-             {/* SVG Pixel Mario fallback */}
-            <svg viewBox="0 0 12 16" className="w-full h-full drop-shadow-lg" shapeRendering="crispEdges">
+             <style>{`
+                @keyframes idle-breathe {
+                    0%, 100% { transform: scaleY(1); }
+                    50% { transform: scaleY(0.97) translateY(1px); }
+                }
+                @keyframes waddle {
+                    0%, 100% { transform: rotate(-5deg); }
+                    50% { transform: rotate(5deg); }
+                }
+                @keyframes walk-leg-left {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-2px); }
+                }
+                @keyframes walk-leg-right {
+                    0%, 100% { transform: translateY(-2px); }
+                    50% { transform: translateY(0); }
+                }
+                .mario-idle {
+                    animation: idle-breathe 2s ease-in-out infinite;
+                    transform-origin: bottom center;
+                }
+                .mario-moving {
+                    animation: waddle 0.3s linear infinite;
+                    transform-origin: bottom center;
+                }
+                .leg-left-anim {
+                    animation: walk-leg-left 0.3s steps(2) infinite;
+                }
+                .leg-right-anim {
+                    animation: walk-leg-right 0.3s steps(2) infinite;
+                }
+             `}</style>
+
+             {/* SVG Pixel Mario */}
+             {/* If jumping, we switch to a jumping pose (hand up). If moving, waddle. If idle, breathe. */}
+            <svg 
+                viewBox="0 0 12 16" 
+                className={`w-full h-full drop-shadow-lg ${isJumping ? '' : (isMoving ? 'mario-moving' : 'mario-idle')}`} 
+                shapeRendering="crispEdges"
+            >
                 {/* Hat (Red) */}
                 <rect x="3" y="0" width="5" height="1" fill="#E52521" />
                 <rect x="2" y="1" width="9" height="1" fill="#E52521" />
@@ -59,25 +102,48 @@ export const Mario: React.FC<{ isJumping: boolean }> = ({ isJumping }) => {
                 <rect x="4" y="4" width="4" height="1" fill="black" /> {/* Mustache */}
 
                 {/* Body (Red/Blue) */}
-                <rect x="2" y="5" width="6" height="3" fill="#E52521" /> {/* Stick to Red for Mario */}
+                <rect x="2" y="5" width="6" height="3" fill="#E52521" /> 
                 <rect x="3" y="5" width="6" height="3" fill="#E52521" /> 
                 
                 {/* Overalls (Blue) */}
                 <rect x="4" y="8" width="4" height="4" fill="#049CD8" />
-                <rect x="2" y="8" width="2" height="3" fill="#049CD8" /> {/* Arm/Shoulder straps */}
-                <rect x="8" y="8" width="2" height="3" fill="#049CD8" />
+                
+                {/* Arm Left */}
+                { isJumping ? (
+                    // Arm up when jumping
+                     <rect x="1" y="4" width="2" height="3" fill="#E52521" /> 
+                ) : (
+                     // Arm down
+                    <rect x="2" y="8" width="2" height="3" fill="#049CD8" /> 
+                )}
+                
+                {/* Arm Right */}
+                 { isJumping ? (
+                     // Arm up
+                    <rect x="9" y="4" width="2" height="3" fill="#E52521" /> 
+                 ) : (
+                     // Arm down
+                    <rect x="8" y="8" width="2" height="3" fill="#049CD8" />
+                 )}
                 
                 {/* Buttons (Yellow) */}
                 <rect x="4" y="9" width="1" height="1" fill="#FBD000" />
                 <rect x="7" y="9" width="1" height="1" fill="#FBD000" />
 
                 {/* Hands (Skin) */}
-                <rect x="0" y="7" width="2" height="2" fill="#FBD000" />
-                <rect x="10" y="7" width="2" height="2" fill="#FBD000" />
+                {/* Left Hand */}
+                <rect x={isJumping ? "0" : "0"} y={isJumping ? "3" : "7"} width="2" height="2" fill="#FBD000" />
+                {/* Right Hand */}
+                <rect x={isJumping ? "10" : "10"} y={isJumping ? "3" : "7"} width="2" height="2" fill="#FBD000" />
 
                 {/* Boots (Brown) */}
-                <rect x="1" y="12" width="3" height="2" fill="#4B3621" />
-                <rect x="8" y="12" width="3" height="2" fill="#4B3621" />
+                {/* Apply leg animation classes when moving */}
+                <g className={isMoving && !isJumping ? 'leg-left-anim' : ''}>
+                     <rect x="1" y="12" width="3" height="2" fill="#4B3621" />
+                </g>
+                <g className={isMoving && !isJumping ? 'leg-right-anim' : ''}>
+                    <rect x="8" y="12" width="3" height="2" fill="#4B3621" />
+                </g>
             </svg>
         </div>
     )
