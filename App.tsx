@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Background } from './components/Background';
 import { Block } from './components/Block';
-import { CoinAnimation, StarAnimation, Mario } from './components/Rewards';
+import { CoinAnimation, StarAnimation, Mario, Heart } from './components/Rewards';
 import { GameState, GameLevel } from './types';
 import { 
   playDutchPronunciation, 
@@ -10,7 +10,9 @@ import {
   playCoinSound, 
   playBumpSound, 
   playPowerUpSound,
-  playJumpSound
+  playJumpSound,
+  playGameOverSound,
+  stopAllSounds
 } from './services/geminiService';
 
 // Level 1: Single Characters
@@ -28,6 +30,8 @@ const DUTCH_WORDS = [
 const getRandomChar = () => ALL_CHARS[Math.floor(Math.random() * ALL_CHARS.length)];
 const getRandomWord = () => DUTCH_WORDS[Math.floor(Math.random() * DUTCH_WORDS.length)];
 
+const INITIAL_LIVES = 6;
+
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.START);
   const [level, setLevel] = useState<GameLevel>(GameLevel.ONE);
@@ -39,6 +43,7 @@ const App: React.FC = () => {
   
   const [score, setScore] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
+  const [lives, setLives] = useState<number>(INITIAL_LIVES);
   
   // Visual States
   const [isError, setIsError] = useState<boolean>(false);
@@ -60,8 +65,19 @@ const App: React.FC = () => {
     setLevel(selectedLevel);
     setScore(0);
     setStreak(0);
+    setLives(INITIAL_LIVES);
     nextRound(selectedLevel);
   }, []);
+
+  const handleBackToMenu = () => {
+      stopAllSounds();
+      setGameState(GameState.START);
+      setIsError(false);
+      setShowCoin(false);
+      setShowStar(false);
+      setHitIndices([]);
+      setLives(INITIAL_LIVES);
+  };
 
   const nextRound = useCallback((currentLevel: GameLevel) => {
     isProcessingRef.current = false;
@@ -176,17 +192,26 @@ const App: React.FC = () => {
   };
 
   const handleError = (target: string) => {
-      setIsError(true);
-      setStreak(0);
-      playBumpSound();
-      setTimeout(() => setIsError(false), 300);
-      
-      // Re-pronounce
-      setTimeout(() => {
-        if (!isProcessingRef.current) {
-             playDutchPronunciation(target);
-        }
-      }, 600);
+      // Calculate new lives immediately
+      const newLives = lives - 1;
+      setLives(newLives);
+
+      if (newLives <= 0) {
+          setGameState(GameState.GAME_OVER);
+          playGameOverSound();
+      } else {
+          setIsError(true);
+          setStreak(0);
+          playBumpSound();
+          setTimeout(() => setIsError(false), 300);
+          
+          // Re-pronounce
+          setTimeout(() => {
+            if (!isProcessingRef.current) {
+                 playDutchPronunciation(target);
+            }
+          }, 600);
+      }
   };
 
   useEffect(() => {
@@ -194,34 +219,51 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [handleKeyPress]);
 
-  // --- Render Helpers ---
-
-  // Calculate Mario's position based on word index
-  // Assuming blocks are fixed width with gap
-  // Block w-16 (64px) + gap-2 (8px) = approx 72px step
-  // But centering is tricky. We'll use style transforms.
-  
   return (
     <Background>
       <div className="w-full h-full relative flex flex-col justify-between">
         
         {/* HUD */}
-        <div className="absolute top-4 left-4 md:left-10 flex gap-8 md:gap-12 text-lg md:text-3xl text-white drop-shadow-[4px_4px_0_rgba(0,0,0,1)] z-40 pixel-font w-full">
-            <div className="flex flex-col">
-                <span className="text-xs md:text-lg text-yellow-400 mb-1">PUNTEN</span>
-                <span>{score.toString().padStart(6, '0')}</span>
-            </div>
-            <div className="flex flex-col">
-                <span className="text-xs md:text-lg text-yellow-400 mb-1">REEKS</span>
-                <span>{streak}</span>
-            </div>
-            {level === GameLevel.TWO && (
-                <div className="flex flex-col ml-auto mr-8">
-                     <span className="text-xs md:text-lg text-green-400 mb-1">WOORD</span>
-                     <span className="tracking-widest">{targetWord}</span>
+        {(gameState !== GameState.START) && (
+            <div className="absolute top-4 left-4 md:left-10 right-4 flex items-start gap-4 md:gap-8 text-lg md:text-3xl text-white drop-shadow-[4px_4px_0_rgba(0,0,0,1)] z-40 pixel-font pointer-events-none w-full">
+                
+                {/* Back Button */}
+                <button 
+                    onClick={handleBackToMenu}
+                    className="pointer-events-auto bg-[#E52521] text-xs md:text-sm border-2 border-white px-2 py-2 md:px-4 rounded shadow-md hover:bg-[#c41f1b] active:translate-y-1 transition-all flex flex-col items-center justify-center gap-1 shrink-0"
+                    aria-label="Menu"
+                >
+                    <span className="text-xl">🏠</span>
+                </button>
+
+                <div className="flex flex-col shrink-0">
+                    <span className="text-xs md:text-lg text-yellow-400 mb-1">PUNTEN</span>
+                    <span>{score.toString().padStart(6, '0')}</span>
                 </div>
-            )}
-        </div>
+
+                {/* Lives Display - Centered or close to center */}
+                <div className="flex flex-col items-center mx-auto md:mx-4 shrink-0">
+                    <span className="text-xs md:text-lg text-red-400 mb-1">LEVENS</span>
+                    <div className="flex gap-1 md:gap-2">
+                        {[...Array(INITIAL_LIVES)].map((_, i) => (
+                            <Heart key={i} filled={i < lives} />
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex flex-col shrink-0">
+                    <span className="text-xs md:text-lg text-yellow-400 mb-1">REEKS</span>
+                    <span>{streak}</span>
+                </div>
+                
+                {level === GameLevel.TWO && (
+                    <div className="hidden md:flex flex-col ml-auto mr-4 md:mr-12 text-right">
+                        <span className="text-xs md:text-lg text-green-400 mb-1">WOORD</span>
+                        <span className="tracking-widest">{targetWord}</span>
+                    </div>
+                )}
+            </div>
+        )}
 
         {gameState === GameState.START ? (
           <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 backdrop-blur-sm">
@@ -249,6 +291,31 @@ const App: React.FC = () => {
                 </div>
               </div>
           </div>
+        ) : gameState === GameState.GAME_OVER ? (
+           <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm">
+              <div className="bg-[#2a2a2a] p-8 md:p-12 rounded-xl border-[4px] border-white shadow-[0_0_20px_rgba(0,0,0,0.8)] text-center animate-shake">
+                  <h2 className="text-4xl md:text-6xl text-[#E52521] mb-6 pixel-font drop-shadow-[4px_4px_0_#000]">GAME OVER</h2>
+                  <div className="text-white text-lg md:text-2xl mb-8 pixel-font space-y-4">
+                      <p>PUNTEN: <span className="text-yellow-400">{score}</span></p>
+                      <p>BESTE REEKS: <span className="text-yellow-400">{streak}</span></p>
+                  </div>
+                  
+                  <div className="flex flex-col gap-4">
+                      <button 
+                          onClick={() => startGame(level)}
+                          className="bg-[#43B047] hover:bg-[#38943b] text-white py-3 px-6 border-b-[4px] border-[#2d7a30] active:translate-y-1 rounded pixel-font"
+                      >
+                          OPNIEUW SPELEN
+                      </button>
+                      <button 
+                          onClick={handleBackToMenu}
+                          className="bg-gray-600 hover:bg-gray-500 text-white py-3 px-6 border-b-[4px] border-gray-800 active:translate-y-1 rounded pixel-font"
+                      >
+                          NAAR MENU
+                      </button>
+                  </div>
+              </div>
+           </div>
         ) : (
           <>
             {/* GAME AREA */}
@@ -277,7 +344,7 @@ const App: React.FC = () => {
                         {showCoin && (
                             <div 
                                 className="absolute top-0 -translate-y-full transition-all duration-300"
-                                style={{ left: `calc(${wordIndex * (4 + (window.innerWidth < 768 ? 4 : 5))}rem + 50%)` }} // Rough calc, refined below in styling
+                                style={{ left: `calc(${wordIndex * (4 + (window.innerWidth < 768 ? 4 : 5))}rem + 50%)` }} 
                             >
                                 <CoinAnimation />
                             </div>
@@ -289,7 +356,7 @@ const App: React.FC = () => {
                                 char={char} 
                                 isHit={hitIndices.includes(index)}
                                 isError={isError && index === wordIndex}
-                                size="small" // Pass prop for smaller blocks
+                                size="small" 
                             />
                         ))}
                      </div>
@@ -298,16 +365,6 @@ const App: React.FC = () => {
 
             {/* Mario Player */}
             <div className="absolute bottom-0 left-0 w-full flex justify-center items-end z-30 pb-1">
-                 {/* 
-                    Mario Container needed for positioning in Level 2.
-                    In Level 1, he is centered (translate-x-0).
-                    In Level 2, he moves relative to center based on wordIndex.
-                    
-                    Blocks are flex-centered. 
-                    Let's assume Small Block is w-16 (4rem) + gap-2 (0.5rem) = 4.5rem per unit.
-                    Center of the word is at width/2.
-                    Offset = (index - (length-1)/2) * unitSize.
-                 */}
                  <div 
                     className="transition-transform duration-500 ease-in-out"
                     style={{

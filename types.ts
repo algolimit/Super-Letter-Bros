@@ -3,7 +3,8 @@ export enum GameState {
   LOADING = 'LOADING',
   PLAYING = 'PLAYING',
   SUCCESS = 'SUCCESS',
-  ERROR = 'ERROR'
+  ERROR = 'ERROR',
+  GAME_OVER = 'GAME_OVER'
 }
 
 export enum GameLevel {

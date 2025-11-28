@@ -331,3 +331,45 @@ export const playPowerUpSound = () => {
   
   currentSource = osc;
 };
+
+export const playGameOverSound = () => {
+  stopAllSounds();
+  const ctx = getAudioContext();
+  const t = ctx.currentTime;
+  
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  
+  osc.type = 'triangle';
+  
+  // Classic "Death" melody approximation
+  const notes = [
+      { freq: 493.88, time: 0.0, dur: 0.15 }, // B4
+      { freq: 698.46, time: 0.15, dur: 0.15 }, // F5
+      // 0.3 rest
+      { freq: 698.46, time: 0.45, dur: 0.15 }, // F5
+      { freq: 698.46, time: 0.60, dur: 0.12 }, // F5
+      { freq: 659.25, time: 0.72, dur: 0.12 }, // E5
+      { freq: 587.33, time: 0.84, dur: 0.12 }, // D5
+      { freq: 523.25, time: 0.96, dur: 0.30 }, // C5
+  ];
+
+  notes.forEach((note) => {
+      osc.frequency.setValueAtTime(note.freq, t + note.time);
+  });
+  
+  // Envelope
+  gain.gain.setValueAtTime(0.15, t);
+  notes.forEach(note => {
+     gain.gain.setValueAtTime(0.15, t + note.time);
+     gain.gain.linearRampToValueAtTime(0.01, t + note.time + note.dur - 0.01);
+  });
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  
+  osc.start(t);
+  osc.stop(t + 1.4);
+  
+  currentSource = osc;
+}

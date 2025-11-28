@@ -82,3 +82,19 @@ export const Mario: React.FC<{ isJumping: boolean }> = ({ isJumping }) => {
         </div>
     )
 }
+
+export const Heart: React.FC<{ filled: boolean }> = ({ filled }) => (
+    <div className={`w-5 h-5 md:w-8 md:h-8 transition-transform duration-200 ${filled ? 'scale-100' : 'scale-90 opacity-50'}`}>
+        <svg viewBox="0 0 16 16" className="w-full h-full drop-shadow-sm" shapeRendering="crispEdges">
+             <path 
+                d="M4 1H8H12V2H13V3H14V4H15V8H14V9H13V10H12V11H11V12H10V13H9V14H7V13H6V12H5V11H4V10H3V9H2V8H1V4H2V3H3V2H4V1Z" 
+                fill={filled ? "#E52521" : "#4a0d0c"} // Red or Dark Red/Blackish
+             />
+             <path 
+                d="M4 2H8H12V3H13V4H14V8H13V9H12V10H11V11H10V12H9V13H7V12H6V11H5V10H4V9H3V8H2V4H3V3H4V2Z"
+                fill={filled ? "#ff6b6b" : "#631210"} // Lighter shade/highlight
+                className="opacity-20"
+             />
+        </svg>
+    </div>
+);
