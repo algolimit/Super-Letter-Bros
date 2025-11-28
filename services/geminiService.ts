@@ -1,9 +1,29 @@
-import { GoogleGenAI, Modality } from "@google/genai";
 
-const API_KEY = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Audio Service
+// Handles loading static audio files from /public/audio with fallbacks to synthesized sound.
 
-// Audio Context Singleton
+// CONFIGURATION: Map your local files here.
+// Expected structure in your 'public' folder:
+// - /audio/letters/a.mp3
+// - /audio/words/kat.mp3
+// - /audio/sfx/jump.mp3
+
+const AUDIO_PATHS = {
+  LETTERS: '/audio/letters', // + /a.mp3
+  WORDS: '/audio/words',     // + /kat.mp3
+  SFX: '/audio/sfx'          // + /jump.mp3
+};
+
+const SFX_FILES = {
+  COIN: 'coin.mp3',
+  JUMP: 'jump.mp3',
+  BUMP: 'bump.mp3',
+  POWERUP: 'powerup.mp3',
+  GAMEOVER: 'gameover.mp3'
+};
+
+// --- Audio Context & State ---
+
 let audioContext: AudioContext | null = null;
 let currentSource: AudioBufferSourceNode | OscillatorNode | null = null;
 const audioCache = new Map<string, AudioBuffer>();
@@ -11,7 +31,7 @@ const audioCache = new Map<string, AudioBuffer>();
 export const getAudioContext = (): AudioContext => {
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 24000, // Gemini TTS uses 24kHz
+      sampleRate: 44100,
     });
   }
   return audioContext;
@@ -23,208 +43,141 @@ export const stopAllSounds = () => {
       currentSource.stop();
       currentSource.disconnect();
     } catch (e) {
-      // Ignore errors if already stopped
+      // Ignore if already stopped
     }
     currentSource = null;
   }
   window.speechSynthesis.cancel();
 };
 
-const DUTCH_PRONUNCIATION_MAP: Record<string, string> = {
-  'A': 'Aa',
-  'B': 'Bee',
-  'C': 'See',
-  'D': 'Dee',
-  'E': 'Ee',
-  'F': 'Ef',
-  'G': 'Gee',
-  'H': 'Haa',
-  'I': 'Ie',
-  'J': 'Jee',
-  'K': 'Kaa',
-  'L': 'El',
-  'M': 'Em',
-  'N': 'En',
-  'O': 'Oo',
-  'P': 'Pee',
-  'Q': 'Kuu',
-  'R': 'Er',
-  'S': 'Es',
-  'T': 'Tee',
-  'U': 'Uu',
-  'V': 'Vee',
-  'W': 'Wee',
-  'X': 'Iks',
-  'Y': 'Ypsilon',
-  'Z': 'Zet',
-  '0': 'Nul',
-  '1': 'Één',
-  '2': 'Twee',
-  '3': 'Drie',
-  '4': 'Vier',
-  '5': 'Vijf',
-  '6': 'Zes',
-  '7': 'Zeven',
-  '8': 'Acht',
-  '9': 'Negen'
-};
+// --- Core Loading Logic ---
 
-// Helper to decode Base64 string to byte array
-function decodeBase64(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+// Decodes raw array buffer into AudioBuffer
+async function decodeAudioData(arrayBuffer: ArrayBuffer, ctx: AudioContext): Promise<AudioBuffer> {
+  return await ctx.decodeAudioData(arrayBuffer);
 }
 
-// Helper to decode raw PCM to AudioBuffer
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext
-): Promise<AudioBuffer> {
-  // Gemini sends raw PCM (Int16, 24kHz, Mono usually)
-  // We need to convert Int16 to Float32 for Web Audio API
-  const dataInt16 = new Int16Array(data.buffer);
-  const channelCount = 1;
-  const sampleRate = 24000;
-  
-  const audioBuffer = ctx.createBuffer(channelCount, dataInt16.length, sampleRate);
-  const channelData = audioBuffer.getChannelData(0);
-  
-  for (let i = 0; i < dataInt16.length; i++) {
-    // Convert 16-bit integer (-32768 to 32767) to float (-1.0 to 1.0)
-    channelData[i] = dataInt16[i] / 32768.0;
+// Fetches a file from public folder, returns AudioBuffer or null if missing
+async function loadAudioFile(path: string): Promise<AudioBuffer | null> {
+  if (audioCache.has(path)) {
+    return audioCache.get(path)!;
   }
-  
-  return audioBuffer;
+
+  try {
+    const response = await fetch(path);
+    if (!response.ok) {
+        // 404 or other error - file doesn't exist locally
+        return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const ctx = getAudioContext();
+    const audioBuffer = await decodeAudioData(arrayBuffer, ctx);
+    
+    audioCache.set(path, audioBuffer);
+    return audioBuffer;
+  } catch (error) {
+    console.warn(`Could not load audio file at ${path}, using fallback.`, error);
+    return null;
+  }
 }
 
-const playBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
+function playBuffer(buffer: AudioBuffer, ctx: AudioContext) {
   stopAllSounds();
   const source = ctx.createBufferSource();
   source.buffer = buffer;
   source.connect(ctx.destination);
   source.start();
   currentSource = source;
+}
+
+// --- Speech Logic (Pronunciation) ---
+
+// Fallback mapping for Dutch Browser TTS
+const DUTCH_PRONUNCIATION_MAP: Record<string, string> = {
+  'A': 'Aa', 'B': 'Bee', 'C': 'See', 'D': 'Dee', 'E': 'Ee',
+  'F': 'Ef', 'G': 'Gee', 'H': 'Haa', 'I': 'Ie', 'J': 'Jee',
+  'K': 'Kaa', 'L': 'El', 'M': 'Em', 'N': 'En', 'O': 'Oo',
+  'P': 'Pee', 'Q': 'Kuu', 'R': 'Er', 'S': 'Es', 'T': 'Tee',
+  'U': 'Uu', 'V': 'Vee', 'W': 'Wee', 'X': 'Iks', 'Y': 'Ypsilon',
+  'Z': 'Zet', '0': 'Nul', '1': 'Één', '2': 'Twee', '3': 'Drie',
+  '4': 'Vier', '5': 'Vijf', '6': 'Zes', '7': 'Zeven', '8': 'Acht',
+  '9': 'Negen'
 };
 
-const fallbackSpeechSynthesis = (text: string) => {
+const fallbackSpeechSynthesis = (text: string, isCharacter: boolean = false) => {
     stopAllSounds();
-    const utterance = new SpeechSynthesisUtterance(text);
+    // If it's a character, look up the phonetic map, otherwise speak the word
+    const speakText = isCharacter 
+        ? (DUTCH_PRONUNCIATION_MAP[text.toUpperCase()] || text) 
+        : text;
+
+    const utterance = new SpeechSynthesisUtterance(speakText);
     utterance.lang = 'nl-NL';
     utterance.rate = 0.9;
-    utterance.pitch = 1.2; // Higher pitch for "fun" fallback
     window.speechSynthesis.speak(utterance);
 };
 
-export const playDutchWord = async (word: string): Promise<void> => {
-    // For full words, we just want natural pronunciation, not spelled out
-    const ctx = getAudioContext();
-    const cacheKey = `WORD_${word.toUpperCase()}`;
-    
-    if (audioCache.has(cacheKey)) {
-        playBuffer(audioCache.get(cacheKey)!, ctx);
-        return;
-    }
-
-    try {
-        const prompt = `Zeg het woord "${word}" duidelijk en vrolijk in het Nederlands.`;
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text: prompt }] }],
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: {
-                    voiceConfig: {
-                      prebuiltVoiceConfig: { voiceName: 'Puck' }, 
-                    },
-                },
-            },
-        });
-  
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  
-        if (base64Audio) {
-            const rawBytes = decodeBase64(base64Audio);
-            const audioBuffer = await decodeAudioData(rawBytes, ctx);
-            audioCache.set(cacheKey, audioBuffer);
-            playBuffer(audioBuffer, ctx);
-        } else {
-            fallbackSpeechSynthesis(word);
-        }
-    } catch (error) {
-        console.error("Gemini TTS Error:", error);
-        fallbackSpeechSynthesis(word);
-    }
-}
-
 export const playDutchPronunciation = async (character: string): Promise<void> => {
   const ctx = getAudioContext();
-  const charUpper = character.toUpperCase();
-  const textToSpeak = DUTCH_PRONUNCIATION_MAP[charUpper] || character.toLowerCase();
+  const path = `${AUDIO_PATHS.LETTERS}/${character.toLowerCase()}.mp3`;
+  
+  // 1. Try to load local file
+  const buffer = await loadAudioFile(path);
 
-  // 1. Check Cache
-  if (audioCache.has(charUpper)) {
-      playBuffer(audioCache.get(charUpper)!, ctx);
-      return;
-  }
-
-  // 2. Try Gemini TTS
-  try {
-      // Prompt designed for "Mario-like" enthusiasm
-      const prompt = `Zeg op een energieke, vrolijke en hoge toon in het Nederlands: ${textToSpeak}`;
-      
-      const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ parts: [{ text: prompt }] }],
-          config: {
-              responseModalities: [Modality.AUDIO],
-              speechConfig: {
-                  voiceConfig: {
-                    // 'Puck' is often lighter/more playful. 'Zephyr' is also good.
-                    prebuiltVoiceConfig: { voiceName: 'Puck' }, 
-                  },
-              },
-          },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-      if (base64Audio) {
-          const rawBytes = decodeBase64(base64Audio);
-          const audioBuffer = await decodeAudioData(rawBytes, ctx);
-          
-          // Cache it
-          audioCache.set(charUpper, audioBuffer);
-          
-          playBuffer(audioBuffer, ctx);
-      } else {
-          console.warn("No audio data returned from Gemini, using fallback.");
-          fallbackSpeechSynthesis(textToSpeak);
-      }
-
-  } catch (error) {
-      console.error("Gemini TTS Error:", error);
-      fallbackSpeechSynthesis(textToSpeak);
+  if (buffer) {
+    playBuffer(buffer, ctx);
+  } else {
+    // 2. Fallback to Browser TTS
+    fallbackSpeechSynthesis(character, true);
   }
 };
 
-// --- SFX Generation (Oscillators for 8-bit feel) ---
+export const playDutchWord = async (word: string): Promise<void> => {
+  const ctx = getAudioContext();
+  const path = `${AUDIO_PATHS.WORDS}/${word.toLowerCase()}.mp3`;
 
-export const playCoinSound = () => {
-  stopAllSounds(); 
+  const buffer = await loadAudioFile(path);
+
+  if (buffer) {
+    playBuffer(buffer, ctx);
+  } else {
+    fallbackSpeechSynthesis(word, false);
+  }
+};
+
+// --- SFX Logic (Sound Effects) ---
+
+// Helper to play SFX with fallback oscillator
+async function playSfx(filename: string, fallbackFn: () => void) {
+  const ctx = getAudioContext();
+  const path = `${AUDIO_PATHS.SFX}/${filename}`;
+  
+  // Allow SFX to overlap slightly (don't stopAllSounds immediately unless it's a long sound)
+  // But for this game, single channel focus is often cleaner.
+  
+  const buffer = await loadAudioFile(path);
+  
+  if (buffer) {
+    // We don't use playBuffer here because we might not want to kill the previous sound completely
+    // if we want overlapping effects (like collecting multiple coins). 
+    // However, to keep it simple and consistent:
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start();
+  } else {
+    fallbackFn();
+  }
+}
+
+export const playCoinSound = () => playSfx(SFX_FILES.COIN, () => {
+  // Fallback: Square Wave Coin
   const ctx = getAudioContext();
   const t = ctx.currentTime;
-  
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   
   osc.type = 'square';
-  // Classic Mario Coin: B5 followed quickly by E6
   osc.frequency.setValueAtTime(987.77, t); 
   osc.frequency.setValueAtTime(1318.51, t + 0.08); 
   
@@ -234,24 +187,18 @@ export const playCoinSound = () => {
   
   osc.connect(gain);
   gain.connect(ctx.destination);
-  
   osc.start(t);
   osc.stop(t + 0.5);
-  
-  currentSource = osc;
-};
+});
 
-export const playJumpSound = () => {
-  // Jump sound overlays, don't stop previous (like pronunciation) abruptly unless needed
-  // stopAllSounds(); 
+export const playJumpSound = () => playSfx(SFX_FILES.JUMP, () => {
+  // Fallback: Slide Up
   const ctx = getAudioContext();
   const t = ctx.currentTime;
-  
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   
   osc.type = 'square';
-  // Classic Jump: Slide up
   osc.frequency.setValueAtTime(150, t);
   osc.frequency.linearRampToValueAtTime(450, t + 0.1);
   
@@ -260,22 +207,17 @@ export const playJumpSound = () => {
   
   osc.connect(gain);
   gain.connect(ctx.destination);
-  
   osc.start(t);
   osc.stop(t + 0.1);
-  
-  // We don't set currentSource here to allow overlap with voice
-};
+});
 
-export const playBumpSound = () => {
+export const playBumpSound = () => playSfx(SFX_FILES.BUMP, () => {
   stopAllSounds();
   const ctx = getAudioContext();
   const t = ctx.currentTime;
-  
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   
-  // Bump is a low square wave interfering with itself or just low freq
   osc.type = 'square';
   osc.frequency.setValueAtTime(150, t);
   osc.frequency.linearRampToValueAtTime(50, t + 0.1);
@@ -285,35 +227,20 @@ export const playBumpSound = () => {
   
   osc.connect(gain);
   gain.connect(ctx.destination);
-  
   osc.start(t);
   osc.stop(t + 0.15);
-  
   currentSource = osc;
-};
+});
 
-export const playPowerUpSound = () => {
+export const playPowerUpSound = () => playSfx(SFX_FILES.POWERUP, () => {
   stopAllSounds();
   const ctx = getAudioContext();
   const t = ctx.currentTime;
-  
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   
   osc.type = 'triangle';
-  
-  // Power up arpeggio
-  const notes = [
-      440.00, // A4
-      554.37, // C#5
-      659.25, // E5
-      880.00, // A5
-      1108.73, // C#6
-      1318.51, // E6
-      1760.00, // A6
-      2217.46, // C#7
-      2637.02  // E7
-  ];
+  const notes = [440.00, 554.37, 659.25, 880.00, 1108.73, 1318.51, 1760.00, 2217.46, 2637.02];
 
   notes.forEach((freq, i) => {
       osc.frequency.setValueAtTime(freq, t + (i * 0.12));
@@ -325,40 +252,33 @@ export const playPowerUpSound = () => {
   
   osc.connect(gain);
   gain.connect(ctx.destination);
-  
   osc.start(t);
   osc.stop(t + 1.5);
-  
   currentSource = osc;
-};
+});
 
-export const playGameOverSound = () => {
+export const playGameOverSound = () => playSfx(SFX_FILES.GAMEOVER, () => {
   stopAllSounds();
   const ctx = getAudioContext();
   const t = ctx.currentTime;
-  
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   
   osc.type = 'triangle';
-  
-  // Classic "Death" melody approximation
   const notes = [
-      { freq: 493.88, time: 0.0, dur: 0.15 }, // B4
-      { freq: 698.46, time: 0.15, dur: 0.15 }, // F5
-      // 0.3 rest
-      { freq: 698.46, time: 0.45, dur: 0.15 }, // F5
-      { freq: 698.46, time: 0.60, dur: 0.12 }, // F5
-      { freq: 659.25, time: 0.72, dur: 0.12 }, // E5
-      { freq: 587.33, time: 0.84, dur: 0.12 }, // D5
-      { freq: 523.25, time: 0.96, dur: 0.30 }, // C5
+      { freq: 493.88, time: 0.0, dur: 0.15 },
+      { freq: 698.46, time: 0.15, dur: 0.15 },
+      { freq: 698.46, time: 0.45, dur: 0.15 },
+      { freq: 698.46, time: 0.60, dur: 0.12 },
+      { freq: 659.25, time: 0.72, dur: 0.12 },
+      { freq: 587.33, time: 0.84, dur: 0.12 },
+      { freq: 523.25, time: 0.96, dur: 0.30 },
   ];
 
   notes.forEach((note) => {
       osc.frequency.setValueAtTime(note.freq, t + note.time);
   });
   
-  // Envelope
   gain.gain.setValueAtTime(0.15, t);
   notes.forEach(note => {
      gain.gain.setValueAtTime(0.15, t + note.time);
@@ -367,9 +287,7 @@ export const playGameOverSound = () => {
 
   osc.connect(gain);
   gain.connect(ctx.destination);
-  
   osc.start(t);
   osc.stop(t + 1.4);
-  
   currentSource = osc;
-}
+});
