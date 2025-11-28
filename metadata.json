@@ -1,0 +1,5 @@
+{
+  "name": "Super Letter Bros",
+  "description": "A Super Mario-themed educational app for toddlers to learn Dutch letters and numbers using Gemini TTS.",
+  "requestFramePermissions": []
+}
