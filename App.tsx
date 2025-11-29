@@ -71,7 +71,7 @@ const App: React.FC = () => {
   const [showStar, setShowStar] = useState<boolean>(false);
   const [isJumping, setIsJumping] = useState<boolean>(false);
   const [isMoving, setIsMoving] = useState<boolean>(false);
-  const [hitIndices, setHitIndices] = useState<number[]>([]); // Tracks which blocks in word are hit
+  const [hitIndices, setHitIndices] = useState<number[]>([]); 
   
   const isProcessingRef = useRef(false);
 
@@ -349,7 +349,9 @@ const App: React.FC = () => {
         ) : (
           <>
             {/* GAME AREA */}
-            <div className="absolute top-[35%] w-full flex flex-col items-center justify-center z-20">
+            {/* Anchored from bottom for consistent jump height calculation */}
+            {/* Mobile: 32 tailwind units (8rem) from bottom. Desktop: 64 units (16rem). */}
+            <div className="absolute bottom-32 md:bottom-64 w-full flex flex-col items-center justify-center z-20">
                 
                 {/* Level 1: Single Block */}
                 {level === GameLevel.ONE && (
@@ -369,37 +371,41 @@ const App: React.FC = () => {
 
                 {/* Level 2: Word Blocks */}
                 {level === GameLevel.TWO && (
-                     <div className="relative flex gap-2 md:gap-4">
-                        {/* Coin always spawns above current active index */}
-                        {showCoin && (
-                            <div 
-                                className="absolute top-0 -translate-y-full transition-all duration-300"
-                                style={{ left: `calc(${wordIndex * (4 + (window.innerWidth < 768 ? 4 : 5))}rem + 50%)` }} 
-                            >
-                                <CoinAnimation />
-                            </div>
-                        )}
+                     /* 
+                        We use CSS variables for block "pitch" (width + gap) to help calculate Mario's translation.
+                        Mobile: 4rem block + 0.5rem gap = 4.5rem
+                        Desktop: 5rem block + 1rem gap = 6rem
+                     */
+                     <div className="relative flex gap-2 md:gap-4 [--block-pitch:4.5rem] md:[--block-pitch:6rem]">
                         
                         {targetWord.split('').map((char, index) => (
-                            <Block 
-                                key={index}
-                                char={char} 
-                                isHit={hitIndices.includes(index)}
-                                isError={isError && index === wordIndex}
-                                size="small" 
-                            />
+                            <div key={index} className="relative">
+                                {/* Coin is now positioned relative to the specific block it comes from */}
+                                {showCoin && index === wordIndex && <CoinAnimation />}
+                                <Block 
+                                    char={char} 
+                                    isHit={hitIndices.includes(index)}
+                                    isError={isError && index === wordIndex}
+                                    size="small" 
+                                />
+                            </div>
                         ))}
                      </div>
                 )}
             </div>
 
             {/* Mario Player */}
-            <div className="absolute bottom-0 left-0 w-full flex justify-center items-end z-30 pb-1">
+            {/* 
+                Mario container also respects the same block pitch.
+                Transform logic: Center is 0. 
+                Move relative to index offset from center: (index - center) * pitch.
+            */}
+            <div className="absolute bottom-0 left-0 w-full flex justify-center items-end z-30 pb-1 [--block-pitch:4.5rem] md:[--block-pitch:6rem]">
                  <div 
                     className="transition-transform duration-500 ease-in-out"
                     style={{
                         transform: level === GameLevel.TWO 
-                            ? `translateX(${(wordIndex - (targetWord.length - 1) / 2) * (window.innerWidth < 768 ? 4.5 : 5.5)}rem)`
+                            ? `translateX(calc((${wordIndex} - ${(targetWord.length - 1) / 2}) * var(--block-pitch)))`
                             : 'translateX(0)'
                     }}
                  >

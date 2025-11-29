@@ -2,9 +2,9 @@ import React from 'react';
 
 export const CoinAnimation: React.FC = () => {
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-14 md:w-14 md:h-16 animate-coin-float z-0 pointer-events-none">
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-10 h-14 md:w-14 md:h-16 z-0 pointer-events-none mb-2">
        {/* Pixel Art Coin */}
-      <div className="w-full h-full bg-yellow-400 rounded-full border-4 border-black relative animate-coin-spin shadow-lg flex items-center justify-center">
+      <div className="w-full h-full bg-yellow-400 rounded-full border-4 border-black relative animate-coin-float shadow-lg flex items-center justify-center">
          <div className="w-2/3 h-4/5 border-2 border-yellow-200 rounded-full opacity-50"></div>
       </div>
     </div>
@@ -44,7 +44,14 @@ export const Mario: React.FC<MarioProps> = ({ isJumping, isMoving = false }) => 
     return (
         <div className={`
             relative w-16 h-16 md:w-20 md:h-20 transition-transform duration-200 ease-in-out
-            ${isJumping ? 'translate-y-[-50px] md:translate-y-[-80px]' : 'translate-y-0'}
+            /* 
+               Jump Height Calculation:
+               Mobile: Block Bottom (8rem/128px) - Mario Height (4rem/64px) = Gap 64px. 
+                       + Slight visual overlap (8px) = ~72px translation.
+               Desktop: Block Bottom (16rem/256px) - Mario Height (5rem/80px) = Gap 176px.
+                       + Slight visual overlap (4px) = ~180px translation.
+            */
+            ${isJumping ? 'translate-y-[-72px] md:translate-y-[-180px]' : 'translate-y-0'}
         `}>
              <style>{`
                 @keyframes idle-breathe {
@@ -77,10 +84,20 @@ export const Mario: React.FC<MarioProps> = ({ isJumping, isMoving = false }) => 
                 .leg-right-anim {
                     animation: walk-leg-right 0.3s steps(2) infinite;
                 }
+                /* Improved Coin Float to match new position */
+                @keyframes coin-float-up {
+                    0% { transform: translate(-50%, 0) scaleX(1); opacity: 0; }
+                    20% { transform: translate(-50%, -40px) scaleX(1); opacity: 1; }
+                    50% { transform: translate(-50%, -50px) scaleX(0.1); } /* Spin */
+                    80% { transform: translate(-50%, -55px) scaleX(1); opacity: 1; }
+                    100% { transform: translate(-50%, -70px) scaleX(1); opacity: 0; }
+                }
+                .animate-coin-float {
+                    animation: coin-float-up 0.8s ease-out forwards;
+                }
              `}</style>
 
              {/* SVG Pixel Mario */}
-             {/* If jumping, we switch to a jumping pose (hand up). If moving, waddle. If idle, breathe. */}
             <svg 
                 viewBox="0 0 12 16" 
                 className={`w-full h-full drop-shadow-lg ${isJumping ? '' : (isMoving ? 'mario-moving' : 'mario-idle')}`} 
@@ -110,19 +127,15 @@ export const Mario: React.FC<MarioProps> = ({ isJumping, isMoving = false }) => 
                 
                 {/* Arm Left */}
                 { isJumping ? (
-                    // Arm up when jumping
                      <rect x="1" y="4" width="2" height="3" fill="#E52521" /> 
                 ) : (
-                     // Arm down
                     <rect x="2" y="8" width="2" height="3" fill="#049CD8" /> 
                 )}
                 
                 {/* Arm Right */}
                  { isJumping ? (
-                     // Arm up
                     <rect x="9" y="4" width="2" height="3" fill="#E52521" /> 
                  ) : (
-                     // Arm down
                     <rect x="8" y="8" width="2" height="3" fill="#049CD8" />
                  )}
                 
@@ -131,13 +144,10 @@ export const Mario: React.FC<MarioProps> = ({ isJumping, isMoving = false }) => 
                 <rect x="7" y="9" width="1" height="1" fill="#FBD000" />
 
                 {/* Hands (Skin) */}
-                {/* Left Hand */}
                 <rect x={isJumping ? "0" : "0"} y={isJumping ? "3" : "7"} width="2" height="2" fill="#FBD000" />
-                {/* Right Hand */}
                 <rect x={isJumping ? "10" : "10"} y={isJumping ? "3" : "7"} width="2" height="2" fill="#FBD000" />
 
                 {/* Boots (Brown) */}
-                {/* Apply leg animation classes when moving */}
                 <g className={isMoving && !isJumping ? 'leg-left-anim' : ''}>
                      <rect x="1" y="12" width="3" height="2" fill="#4B3621" />
                 </g>
@@ -154,11 +164,11 @@ export const Heart: React.FC<{ filled: boolean }> = ({ filled }) => (
         <svg viewBox="0 0 16 16" className="w-full h-full drop-shadow-sm" shapeRendering="crispEdges">
              <path 
                 d="M4 1H8H12V2H13V3H14V4H15V8H14V9H13V10H12V11H11V12H10V13H9V14H7V13H6V12H5V11H4V10H3V9H2V8H1V4H2V3H3V2H4V1Z" 
-                fill={filled ? "#E52521" : "#4a0d0c"} // Red or Dark Red/Blackish
+                fill={filled ? "#E52521" : "#4a0d0c"} 
              />
              <path 
                 d="M4 2H8H12V3H13V4H14V8H13V9H12V10H11V11H10V12H9V13H7V12H6V11H5V10H4V9H3V8H2V4H3V3H4V2Z"
-                fill={filled ? "#ff6b6b" : "#631210"} // Lighter shade/highlight
+                fill={filled ? "#ff6b6b" : "#631210"} 
                 className="opacity-20"
              />
         </svg>
